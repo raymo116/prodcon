@@ -139,14 +139,14 @@ void *producerThread(void* param) {
             // Store the checksum (use the Internet checksum) in the last 2 bytes
             // of the shared memory block
             ((unsigned short int *)shared_memory)[(index+1)/2] = checksum;
-
             // Release memory
             pthread_mutex_unlock(&mutex);
 
             // Let consumer loose
             if (sem_post(&sem[1]) != 0)
                 printf("%s\n",strerror(errno));
-        }
+            }
+
     }
 
     pthread_exit(0);
@@ -165,12 +165,13 @@ void *consumerThread(void* param) {
     for(int n = 0; n < n_times; ++n) {
         int index = 0;
 
-        // Blocks if there's no data to read
-    	if (sem_wait(&sem[1]) != 0)
-    	    printf("%s\n",strerror(errno));
-
         // Cycles through all of the memory blocks
         for (int block = 0; block < blocks; block++) {
+
+            // Blocks if there's no data to read
+    	    if (sem_wait(&sem[1]) != 0)
+    	        printf("%s\n",strerror(errno));
+
             // Locks memory
             pthread_mutex_lock(&mutex);
 
@@ -192,7 +193,7 @@ void *consumerThread(void* param) {
             if(given_checksum != calculated_checksum) {
                 printf("The checksums at block %d, iteration %d did not match\n", block, n);
                 printf("Recieved Checksum: %d\nCalculated Checksum: %d\n", given_checksum, calculated_checksum);
-                // exit(1);
+                exit(1);
             }
 
             // Release memory region
