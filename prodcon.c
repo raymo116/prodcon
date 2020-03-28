@@ -10,6 +10,9 @@ ASSIGNMENT: The idea is to write a C/C++ program that creates two threads. The
             producer writing) use a mutex semaphore and counting semaphores to
             coordinate when each thread can safely write or read to/from a
             common shared memory region.
+
+COMPILE:    Compile using the following command:
+            `gcc -pthread prodcon.c`
 */
 
 
@@ -115,7 +118,8 @@ DESC:   The producer thread is to create 30 bytes of random data (0-255) then
 void *producerThread(void* param) {
 
     // Does it n times
-    for(int n = 0; n < n_times; ++n) {
+    int n;
+    for(n = 0; n < n_times; ++n) {
         // current index of memory region
         int index;
 
@@ -162,7 +166,8 @@ DESC:   The consumer thread is to read the shared memory buffer of 30 bytes,
 void *consumerThread(void* param) {
 
     // Does it n times
-    for(int n = 0; n < n_times; ++n) {
+    int n;
+    for(n = 0; n < n_times; ++n) {
         int index = 0;
 
         // Cycles through all of the memory blocks
