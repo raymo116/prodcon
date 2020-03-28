@@ -113,37 +113,40 @@ DESC:   The producer thread is to create 30 bytes of random data (0-255) then
         with the consumer.
 */
 void *producerThread(void* param) {
-    // current index of memory region
-    int index;
 
     // Does it n times
     for(int n = 0; n < n_times; ++n) {
+        // current index of memory region
+        int index;
 
         // Blocks until consumer is ready to start over
         if (sem_wait(&sem[0]) != 0)
             printf("%s\n",strerror(errno));
 
-        // Puts a lock on the memory
-        pthread_mutex_lock(&mutex);
+        // Cycles through all of the memory blocks
+        for (int block = 0; block < blocks; block++) {
+            // Puts a lock on the memory
+            pthread_mutex_lock(&mutex);
 
-        unsigned short int checksum = 0;
+            unsigned short int checksum = 0;
 
-        // Creates random data and saves to checksum
-        for(index = 0; index < (BLOCK_SIZE-2); ++index) {
-            shared_memory[index] = rand()%255;
-            checksum += shared_memory[index];
+            // Creates random data and saves to checksum
+            for(index = (block*BLOCK_SIZE); index < (((block+1)*BLOCK_SIZE)-2); ++index) {
+                shared_memory[index] = rand()%255;
+                checksum += shared_memory[index];
+            }
+
+            // Store the checksum (use the Internet checksum) in the last 2 bytes
+            // of the shared memory block
+            ((unsigned short int *)shared_memory)[(index+1)/2] = checksum;
+
+            // Release memory
+            pthread_mutex_unlock(&mutex);
+
+            // Let consumer loose
+            if (sem_post(&sem[1]) != 0)
+                printf("%s\n",strerror(errno));
         }
-
-        // Store the checksum (use the Internet checksum) in the last 2 bytes
-        // of the shared memory block
-        ((unsigned short int *)shared_memory)[(index+1)/2] = checksum;
-
-        // Release memory
-        pthread_mutex_unlock(&mutex);
-
-        // Let consumer loose
-        if (sem_post(&sem[1]) != 0)
-            printf("%s\n",strerror(errno));
     }
 
     pthread_exit(0);
@@ -157,41 +160,44 @@ DESC:   The consumer thread is to read the shared memory buffer of 30 bytes,
         read with the producer.
 */
 void *consumerThread(void* param) {
-    int index;
 
     // Does it n times
     for(int n = 0; n < n_times; ++n) {
+        int index = 0;
 
         // Blocks if there's no data to read
     	if (sem_wait(&sem[1]) != 0)
     	    printf("%s\n",strerror(errno));
 
-        // Locks memory
-        pthread_mutex_lock(&mutex);
+        // Cycles through all of the memory blocks
+        for (int block = 0; block < blocks; block++) {
+            // Locks memory
+            pthread_mutex_lock(&mutex);
 
-        unsigned short int calculated_checksum = 0;
+            unsigned short int calculated_checksum = 0;
 
-        // Reads the memory and calculates the checksum
-        for(index = 0; index < (BLOCK_SIZE-2); ++index) {
-            calculated_checksum += shared_memory[index];
+            // Reads the memory and calculates the checksum
+            for(index = (block*BLOCK_SIZE); index < (((block+1)*BLOCK_SIZE)-2); ++index) {
+                calculated_checksum += shared_memory[index];
+            }
+
+            // Grabs the checksum from the end of the shared memory region
+            int given_checksum = ((unsigned short int *)shared_memory)[(index+1)/2];
+
+            // Compare that with the value stored in the shared memory buffer to
+            // ensure that the data did not get corrupted
+            // If the consumer detects a mismatched checksum it is to report the
+            // error along with the expected checksum and the calculated checksum
+            // and exit the program.
+            if(given_checksum != calculated_checksum) {
+                printf("The checksums at block %d, iteration %d did not match\n", block, n);
+                printf("Recieved Checksum: %d\nCalculated Checksum: %d\n", given_checksum, calculated_checksum);
+                // exit(1);
+            }
+
+            // Release memory region
+            pthread_mutex_unlock(&mutex);
         }
-
-        // Grabs the checksum from the end of the shared memory region
-        int given_checksum = ((unsigned short int *)shared_memory)[(index+1)/2];
-
-        // Compare that with the value stored in the shared memory buffer to
-        // ensure that the data did not get corrupted
-        // If the consumer detects a mismatched checksum it is to report the
-        // error along with the expected checksum and the calculated checksum
-        // and exit the program.
-        if(given_checksum != calculated_checksum) {
-            printf("%s\n",strerror(errno));
-            printf("Recieved Checksum: %d\nCalculated Checksum: %d\n", given_checksum, calculated_checksum);
-            exit(1);
-        }
-
-        // Release memory region
-        pthread_mutex_unlock(&mutex);
 
         // Allow the producer to continue on to the next cycle
         if (sem_post(&sem[0]) != 0)
