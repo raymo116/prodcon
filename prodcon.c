@@ -128,7 +128,8 @@ void *producerThread(void* param) {
             printf("%s\n",strerror(errno));
 
         // Cycles through all of the memory blocks
-        for (int block = 0; block < blocks; block++) {
+        int block;
+        for(block = 0; block < blocks; block++) {
             // Puts a lock on the memory
             pthread_mutex_lock(&mutex);
 
@@ -171,7 +172,8 @@ void *consumerThread(void* param) {
         int index = 0;
 
         // Cycles through all of the memory blocks
-        for (int block = 0; block < blocks; block++) {
+        int block;
+        for(block = 0; block < blocks; block++) {
 
             // Blocks if there's no data to read
     	    if (sem_wait(&sem[1]) != 0)
